@@ -4,38 +4,40 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 
 
-#url = 'https://www.domkor-dom.com/prodazha-kvartir-Novostroiki/kvartira-Naberezhnye-Chelny/'
+complex_urls = (
+    'https://www.domkor-dom.com/prodazha-kvartir-Novostroiki/kvartira-Naberezhnye-Chelny/zhk-romantiki-22-11',
+    'https://www.domkor-dom.com/prodazha-kvartir-Novostroiki/kvartira-Naberezhnye-Chelny/kvartiry-novostroiki-chelny-20-14',
+    'https://www.domkor-dom.com/prodazha-kvartir-Novostroiki/kvartira-Naberezhnye-Chelny/prodazha-kvartir-20-12-druzhnyi'
+)
 
-url = 'https://www.domkor-dom.com/prodazha-kvartir-Novostroiki/kvartira-Naberezhnye-Chelny/zhk-romantiki-22-11'
-rounds = 10
+driver = webdriver.Chrome()
 
-def visit_houses():
-    wrap_div = driver.find_element('class name', 'wrap1050')
-    tables = wrap_div.find_elements('tag name', 'table')
-
-    for table in tables:
-        tds = table.find_elements('tag name', 'td')
-        
-        for td in tds:
-            #current_url = driver.current_url
-            a = td.find_element('tag name', 'a')
-            #div = td.find_elements('tag name', 'div')[1]
-            #img = td.find_element('tag name', 'img')
-            a.click()
-            time.sleep(1)
-            
-            driver.back()
-            time.sleep(1)
-
+#def visit_houses():
+#    wrap_div = driver.find_element('class name', 'wrap1050')
+#    tables = wrap_div.find_elements('tag name', 'table')
+#
+#    for table in tables:
+#        tds = table.find_elements('tag name', 'td')
+#        
+#        for td in tds:
+#            #current_url = driver.current_url
+#            a = td.find_element('tag name', 'a')
+#            #div = td.find_elements('tag name', 'div')[1]
+#            #img = td.find_element('tag name', 'img')
+#            a.click()
+#            time.sleep(1)
+#            
+#            driver.back()
+#            time.sleep(1)
 
 def close_popup():
         try:
-            annoying_popup = driver.find_element(By.XPATH, "//a[@class='white-saas-generator-close-button']")
-            annoying_popup.click()
+            close_annoying_popup = driver.find_element(By.XPATH, "//a[@class='white-saas-generator-close-button']")
+            close_annoying_popup.click()
         except:
             pass
 
-def parse_appartment_as_html(html: str) -> list[str]:
+def parse_apartment_as_html(html: str) -> list[str]:
     import re
 
     pattern_common = r'<br>\s*([^<\s\n][^<\n]*?)\s*(?=<br>|$)'
@@ -56,21 +58,43 @@ def parse_appartment_as_html(html: str) -> list[str]:
 
     return data
 
+def parse_residential_complex(complex_url: str) -> list[str]:
+    driver.get(complex_url)
+    time.sleep(2)
+    close_popup()
+
+    apartments = []
+    divs = driver.find_elements(By.XPATH, "//div[contains(@id, 'kvartira')]/following-sibling::div[@class='sh']")
+    for div in divs:
+        apartment_html = div.get_attribute('innerHTML')
+        apartments.append(parse_apartment_as_html(apartment_html))
+
+    return apartments
+
+def save_complexes_to_excel(columns: list[str], complexes: dict[str, list[str]]) -> None:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+
+    for name, apartments in complexes.items():
+        ws = wb.create_sheet(name)
+        ws.append(columns)
+        for apartment in apartments:
+            ws.append(apartment)
+
+    wb.save("complexes.xlsx")
+
 def main():
-    appartments = []
+    fields = ("Квартира №", "Комнаты", "Площадь", "Цена")
+    complexes = {}
 
     try:
-        driver = webdriver.Chrome()
-        driver.get(url)
+        for url in complex_urls:
+            apartments = parse_residential_complex(url)
+            name = url.split('/')[-1]
+            complexes[name] = apartments
 
-        time.sleep(2)
-
-        close_popup()
-
-        divs = driver.find_elements(By.XPATH, "//div[contains(@id, 'kvartira')]/following-sibling::div[@class='sh']")
-        for appartment in divs:
-            appartment_html = appartment.get_attribute('innerHTML')
-            appartments.append(parse_appartment_as_html(appartment_html))
+        save_complexes_to_excel(fields, complexes)
     
     finally:
         driver.quit()
